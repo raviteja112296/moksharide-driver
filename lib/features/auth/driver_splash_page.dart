@@ -43,22 +43,22 @@ class _DriverSplashPageState extends State<DriverSplashPage>
     _checkAuthStatus();
   }
 
-  Future<void> _checkAuthStatus() async {
-    await Future.delayed(Duration(seconds: 3));
-    User? currentUser = FirebaseAuth.instance.currentUser;
+ Future<void> _checkAuthStatus() async {
+  await Future.delayed(const Duration(seconds: 3));
 
-    if (currentUser != null) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => DriverHomePage()),
-      );
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => DriverSignInPage()),
-      );
-    }
-  }
+  if (!mounted) return;
+
+  User? currentUser = FirebaseAuth.instance.currentUser;
+
+  Navigator.pushReplacement(
+    context,
+    MaterialPageRoute(
+      builder: (_) =>
+          currentUser != null ? DriverHomePage() : DriverSignInPage(),
+    ),
+  );
+}
+
 
   @override
   void dispose() {

@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:moksharide_driver/features/auth/driver_signin_page.dart';
+import 'package:moksharide_driver/features/auth/driver_splash_page.dart';
 import 'package:moksharide_driver/features/home/driver_home_page.dart';
 import 'package:moksharide_driver/features/map/driver_map_widget.dart';
 import 'services/local_notification_service.dart';
@@ -59,8 +60,8 @@ class MyApp extends StatelessWidget {
       // home: DriverHomePage(
       //   forceOnline: openedFromNotification,
       // ),
-      // home: _checkAuthStatus(),
-      home: DriverMapWidget(),
+      home: DriverSplashPage(),
+      // home: DriverMapWidget(),
     );
   }
 }
