@@ -138,7 +138,7 @@ String _getUserFriendlyError(String code) {
     case 'too-many-requests':
       return 'Too many attempts. Try again later';
     default:
-      return 'Login failed: ${code}';
+      return 'Login failed: $code';
   }
 }
 

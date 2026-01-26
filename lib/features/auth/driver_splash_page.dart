@@ -4,6 +4,8 @@ import 'package:moksharide_driver/features/auth/driver_signin_page.dart';
 import 'package:moksharide_driver/features/home/driver_home_page.dart';
 
 class DriverSplashPage extends StatefulWidget {
+  const DriverSplashPage({super.key});
+
   @override
   _DriverSplashPageState createState() => _DriverSplashPageState();
 }

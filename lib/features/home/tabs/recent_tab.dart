@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
 class RecentTab extends StatelessWidget {
+  const RecentTab({super.key});
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -42,7 +44,7 @@ class RecentTab extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      '${DateFormat('MMM yyyy').format(DateTime.now())}',
+                      DateFormat('MMM yyyy').format(DateTime.now()),
                       style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                     ),
                   ),
