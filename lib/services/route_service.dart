@@ -1,6 +1,6 @@
 import 'dart:convert';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
-import 'package:latlong2/latlong.dart';
 
 class RouteService {
   static Future<List<LatLng>> getRoute({

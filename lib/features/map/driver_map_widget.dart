@@ -1,241 +1,173 @@
-import 'dart:math' as math;
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-class DriverMapWidget extends StatelessWidget {
+class DriverMapWidget extends StatefulWidget {
   final LatLng driverLocation;
   final bool isOnline;
   final double heading;
-
   final LatLng? pickupLocation;
   final LatLng? dropLocation;
 
-  /// 🔥 OSRM route points
-  final List<LatLng> routePoints;
+  // 🔥 We accept points from parent, or we will calculate a straight line below
+  final List<LatLng> routePoints; 
 
   const DriverMapWidget({
     super.key,
     required this.driverLocation,
     required this.isOnline,
     required this.heading,
-    required this.routePoints,
     this.pickupLocation,
     this.dropLocation,
+    required this.routePoints, // Ensure this is passed from parent
   });
 
   @override
-  Widget build(BuildContext context) {
-    return FlutterMap(
-      options: MapOptions(
-        initialCenter: driverLocation,
-        initialZoom: 14,
-        minZoom: 10,
-        maxZoom: 18,
+  State<DriverMapWidget> createState() => _DriverMapWidgetState();
+}
+
+class _DriverMapWidgetState extends State<DriverMapWidget> {
+  final Completer<GoogleMapController> _controller = Completer();
+
+  @override
+  void didUpdateWidget(covariant DriverMapWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // 1. Animate Camera if Driver Moves
+    if (widget.driverLocation != oldWidget.driverLocation) {
+      _animateCamera(widget.driverLocation, widget.heading);
+    }
+    
+    // Note: We removed _fetchRoadRoute() because you don't want routing services.
+    // The line will update automatically in build() below.
+  }
+
+  Future<void> _animateCamera(LatLng pos, double heading) async {
+    final GoogleMapController controller = await _controller.future;
+    controller.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: pos,
+          zoom: 17.0,
+          bearing: heading,
+          tilt: 45.0,
+        ),
       ),
-      children: [
-        /// 🌍 OSM Tiles
-        TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.moksharide.driver',
-        ),
-
-        /// 🛣️ ROUTE POLYLINE
-        if (routePoints.isNotEmpty)
-          PolylineLayer(
-            polylines: [
-              Polyline(
-                points: routePoints,
-                strokeWidth: 5,
-                color: Colors.blueAccent,
-                borderStrokeWidth: 2,
-                borderColor: Colors.white,
-              ),
-            ],
-          ),
-
-        /// 📍 MARKERS
-        MarkerLayer(
-          markers: [
-            /// 🚗 DRIVER
-            Marker(
-              point: driverLocation,
-              width: 70,
-              height: 70,
-              child: _DriverMarker(
-                isOnline: isOnline,
-                heading: heading,
-              ),
-            ),
-
-            /// 📍 PICKUP
-            if (pickupLocation != null)
-              Marker(
-                point: pickupLocation!,
-                width: 50,
-                height: 50,
-                child: const _PickupMarker(),
-              ),
-
-            /// 🏁 DROP
-            if (dropLocation != null)
-              Marker(
-                point: dropLocation!,
-                width: 50,
-                height: 50,
-                child: const _DropMarker(),
-              ),
-          ],
-        ),
-      ],
     );
   }
-}
-
-/* -------------------------------------------------------------------------- */
-/*                            DRIVER MARKER (ROTATING)                         */
-/* -------------------------------------------------------------------------- */
-
-class _DriverMarker extends StatelessWidget {
-  final bool isOnline;
-  final double heading;
-
-  const _DriverMarker({
-    required this.isOnline,
-    required this.heading,
-  });
 
   @override
   Widget build(BuildContext context) {
-    final Color baseColor =
-        isOnline ? const Color(0xFF1DB954) : Colors.grey.shade600;
+    return GoogleMap(
+      initialCameraPosition: CameraPosition(
+        target: widget.driverLocation,
+        zoom: 15.0,
+      ),
+      mapType: MapType.normal,
+      zoomControlsEnabled: false,
+      myLocationButtonEnabled: false,
+      compassEnabled: false,
+      trafficEnabled: widget.isOnline,
 
-    final double rotation = heading * (math.pi / 180);
+      onMapCreated: (GoogleMapController controller) {
+        _controller.complete(controller);
+      },
 
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 600),
-          width: isOnline ? 52 : 40,
-          height: isOnline ? 52 : 40,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: baseColor.withOpacity(0.15),
-          ),
-        ),
-
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white,
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black26,
-                blurRadius: 8,
-                offset: Offset(0, 4),
-              ),
-            ],
-          ),
-        ),
-
-        AnimatedRotation(
-          turns: rotation / (2 * math.pi),
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-          child: Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: baseColor,
-            ),
-            child: const Icon(
-              Icons.navigation,
-              size: 20,
-              color: Colors.white,
-            ),
-          ),
-        ),
-      ],
+      polylines: _buildPolylines(),
+      markers: _buildMarkers(),
     );
   }
-}
 
-/* -------------------------------------------------------------------------- */
-/*                            PICKUP MARKER                                    */
-/* -------------------------------------------------------------------------- */
-
-class _PickupMarker extends StatelessWidget {
-  const _PickupMarker();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: Colors.green,
-            shape: BoxShape.circle,
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black26,
-                blurRadius: 6,
-                offset: Offset(0, 3),
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.arrow_upward,
-            color: Colors.white,
-            size: 18,
-          ),
+  Set<Polyline> _buildPolylines() {
+    // 1. If the parent passed specific points (e.g. from OSRM), use them.
+    if (widget.routePoints.isNotEmpty) {
+      return {
+        Polyline(
+          polylineId: const PolylineId('road_path'),
+          points: widget.routePoints,
+          color: Colors.blue,
+          width: 5,
+          jointType: JointType.round,
+          startCap: Cap.roundCap,
+          endCap: Cap.roundCap,
         ),
-        const SizedBox(height: 4),
-        const CircleAvatar(radius: 3, backgroundColor: Colors.green),
-      ],
-    );
+      };
+    }
+
+    // 2. FALLBACK: If no route points provided, draw a STRAIGHT LINE.
+    // This ensures a blue line always shows up, even without API/Internet.
+    List<LatLng> straightLinePoints = [];
+    
+    if (widget.pickupLocation != null) {
+      // Line: Driver -> Pickup
+      straightLinePoints.add(widget.driverLocation);
+      straightLinePoints.add(widget.pickupLocation!);
+      
+      // If we also have a drop, extend line: Pickup -> Drop
+      if (widget.dropLocation != null) {
+        straightLinePoints.add(widget.dropLocation!);
+      }
+    }
+
+    if (straightLinePoints.isNotEmpty) {
+      return {
+        Polyline(
+          polylineId: const PolylineId('direct_line'),
+          points: straightLinePoints,
+          color: Colors.blue, // Google Blue
+          width: 5,
+          patterns: [PatternItem.dash(10), PatternItem.gap(10)], // Dashed line for direct path
+          jointType: JointType.round,
+          startCap: Cap.roundCap,
+          endCap: Cap.roundCap,
+        ),
+      };
+    }
+
+    return {};
   }
-}
 
-/* -------------------------------------------------------------------------- */
-/*                              DROP MARKER                                    */
-/* -------------------------------------------------------------------------- */
+  Set<Marker> _buildMarkers() {
+    Set<Marker> markers = {};
 
-class _DropMarker extends StatelessWidget {
-  const _DropMarker();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: Colors.red,
-            shape: BoxShape.circle,
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black26,
-                blurRadius: 6,
-                offset: Offset(0, 3),
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.flag,
-            color: Colors.white,
-            size: 18,
-          ),
+    // 🚗 DRIVER MARKER
+    markers.add(
+      Marker(
+        markerId: const MarkerId('driver'),
+        position: widget.driverLocation,
+        rotation: widget.heading,
+        flat: true,
+        anchor: const Offset(0.5, 0.5),
+        icon: BitmapDescriptor.defaultMarkerWithHue(
+          widget.isOnline ? BitmapDescriptor.hueBlue : BitmapDescriptor.hueOrange,
         ),
-        const SizedBox(height: 4),
-        const CircleAvatar(radius: 3, backgroundColor: Colors.red),
-      ],
+      ),
     );
+
+    // 🟢 PICKUP MARKER
+    if (widget.pickupLocation != null) {
+      markers.add(
+        Marker(
+          markerId: const MarkerId('pickup'),
+          position: widget.pickupLocation!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          infoWindow: const InfoWindow(title: "Pickup Here"),
+        ),
+      );
+    }
+
+    // 🔴 DROP MARKER
+    if (widget.dropLocation != null) {
+      markers.add(
+        Marker(
+          markerId: const MarkerId('drop'),
+          position: widget.dropLocation!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          infoWindow: const InfoWindow(title: "Drop Here"),
+        ),
+      );
+    }
+
+    return markers;
   }
 }
