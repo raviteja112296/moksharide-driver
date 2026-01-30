@@ -7,7 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:moksharide_driver/features/map/services/get_current_location.dart';
 import 'package:moksharide_driver/features/ride/domain/driver_ride_ui_state.dart';
-import 'package:moksharide_driver/features/ride/presentation/widgets/driver_ride_sheet.dart';
+import 'package:moksharide_driver/features/ride/presentation/widgets/driver_ride_sheet.dart'; // Ensure this matches your file path
 import 'package:moksharide_driver/services/route_service.dart';
 import 'driver_map_widget.dart';
 
@@ -40,6 +40,9 @@ class _DriverMapContainerState extends State<DriverMapContainer> {
   String? _rideStatus;
   double _heading = 0.0;
   bool _otpVerified = false;
+  
+  // 🔥 NEW: Store full ride data to access address/details later
+  Map<String, dynamic>? _activeRideData;
 
   bool _isRouteLoading = false;
 
@@ -49,9 +52,7 @@ class _DriverMapContainerState extends State<DriverMapContainer> {
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
 
-  DateTime _lastFirestoreUpdate =
-      DateTime.fromMillisecondsSinceEpoch(0);
-
+  DateTime _lastFirestoreUpdate = DateTime.fromMillisecondsSinceEpoch(0);
 
   // ───────────────── LIFECYCLE ─────────────────
 
@@ -91,20 +92,31 @@ class _DriverMapContainerState extends State<DriverMapContainer> {
   // ───────────────── OTP & COMPLETE ─────────────────
 
   Future<void> _verifyOtp() async {
-  if (widget.activeRideId == null) return;
+    if (widget.activeRideId == null) return;
 
-  await _firestore
-      .collection('ride_requests')
-      .doc(widget.activeRideId)
-      .update({'status': 'started'});
+    // UI Optimistic Update
+    setState(() {
+      _otpVerified = true;
+      _rideStatus = 'started';
+    });
 
-  setState(() {
-    _otpVerified = true;
-    _rideStatus = 'started';
-  });
-}
-
-
+    try {
+      await _firestore
+          .collection('ride_requests')
+          .doc(widget.activeRideId)
+          .update({
+            'status': 'started',
+            'startedAt': FieldValue.serverTimestamp(),
+          });
+    } catch (e) {
+      debugPrint("❌ Failed to verify OTP: $e");
+      // Revert if failed
+      setState(() {
+        _otpVerified = false;
+        _rideStatus = 'accepted';
+      });
+    }
+  }
 
   Future<void> _completeRide() async {
     if (widget.activeRideId == null) return;
@@ -112,7 +124,12 @@ class _DriverMapContainerState extends State<DriverMapContainer> {
     await _firestore
         .collection('ride_requests')
         .doc(widget.activeRideId)
-        .update({'status': 'completed'});
+        .update({
+          'status': 'completed',
+          'completedAt': FieldValue.serverTimestamp(),
+        });
+        
+    // Reset local state handled by listener
   }
 
   // ───────────────── LOCATION ─────────────────
@@ -128,20 +145,23 @@ class _DriverMapContainerState extends State<DriverMapContainer> {
   void _startLiveTracking() {
     const settings = LocationSettings(
       accuracy: LocationAccuracy.high,
-      distanceFilter: 1,
+      distanceFilter: 5, // Increased slightly to reduce jitter
     );
 
     _positionSub = Geolocator.getPositionStream(
       locationSettings: settings,
     ).listen((position) {
-      _currentLocation =
-          LatLng(position.latitude, position.longitude);
-      _heading = position.heading;
+      if (!mounted) return;
+      
+      setState(() {
+        _currentLocation = LatLng(position.latitude, position.longitude);
+        _heading = position.heading;
+      });
 
       _syncDriverLocation(position);
+      
+      // Only update route if we moved significantly (optional optimization)
       _updateRoute();
-
-      setState(() {});
     });
   }
 
@@ -170,48 +190,50 @@ class _DriverMapContainerState extends State<DriverMapContainer> {
   }
 
   // ───────────────── RIDE LISTENER ─────────────────
-  
 
   void _listenToRide(String rideId) {
-  _rideSub = _firestore
-      .collection('ride_requests')
-      .doc(rideId)
-      .snapshots()
-      .listen((doc) {
-    if (!doc.exists) return;
+    _rideSub?.cancel(); // Cancel any previous listener
+    
+    _rideSub = _firestore
+        .collection('ride_requests')
+        .doc(rideId)
+        .snapshots()
+        .listen((doc) {
+      if (!doc.exists) return;
 
-    final data = doc.data()!;
-    _rideStatus = data['status'];
-    _rideOtp = data['rideOtp']?.toString();
-    if (_rideStatus == 'accepted') {
-      _pickupLocation = LatLng(
-  data['pickupLat'],
-  data['pickupLng'],
-);
-debugPrint("📍 Pickup raw: ${data['pickup']}");
-debugPrint("📍 Parsed pickup: $_pickupLocation");
+      final data = doc.data()!;
+      
+      setState(() {
+        _activeRideData = data; // 🔥 Capture full data here
+        _rideStatus = data['status'];
+        _rideOtp = data['rideOtp']?.toString();
+      });
 
-      _dropLocation = null;
-      _otpVerified = false;
-    }
+      if (_rideStatus == 'accepted') {
+        setState(() {
+          _pickupLocation = LatLng(data['pickupLat'], data['pickupLng']);
+          _dropLocation = null;
+          _otpVerified = false;
+        });
+        debugPrint("📍 Pickup: $_pickupLocation");
+      }
 
-    if (_rideStatus == 'started') {
-      _pickupLocation = LatLng(
-  data['pickupLat'],
-  data['pickupLng'],
-);
-      _dropLocation = LatLng(data['dropLat'],data['dropLng'],);
-      _otpVerified = true;
-    }
+      if (_rideStatus == 'started') {
+        setState(() {
+           // Ensure we keep pickup for reference, but focus is drop
+          _pickupLocation = LatLng(data['pickupLat'], data['pickupLng']);
+          _dropLocation = LatLng(data['dropLat'], data['dropLng']);
+          _otpVerified = true;
+        });
+      }
 
-    if (_rideStatus == 'completed' || _rideStatus == 'cancelled') {
-      _clearRide();
-    }
+      if (_rideStatus == 'completed' || _rideStatus == 'cancelled') {
+        _clearRide();
+      }
 
-    _updateRoute();
-    setState(() {});
-  });
-}
+      _updateRoute();
+    });
+  }
 
 
   // ───────────────── ROUTING ─────────────────
@@ -229,6 +251,9 @@ debugPrint("📍 Parsed pickup: $_pickupLocation");
 
     if (target == null) return;
 
+    // Optimization: Don't fetch if target hasn't changed & we have points
+    // (You can add logic here to check distance to last fetched point)
+
     _isRouteLoading = true;
 
     try {
@@ -237,25 +262,19 @@ debugPrint("📍 Parsed pickup: $_pickupLocation");
         end: target,
       );
 
-      _routePoints = points;
+      if (mounted) {
+        setState(() {
+          _routePoints = points;
+        });
+      }
     } catch (e) {
       debugPrint("❌ Route error: $e");
     } finally {
-      _isRouteLoading = false;
+      if (mounted) _isRouteLoading = false;
     }
   }
 
   // ───────────────── HELPERS ─────────────────
-
-  LatLng _parseLatLng(dynamic value) {
-    if (value is GeoPoint) {
-      return LatLng(value.latitude, value.longitude);
-    }
-    if (value is Map) {
-      return LatLng(value['lat'], value['lng']);
-    }
-    throw Exception("Invalid location format");
-  }
 
   void _clearRide() {
     _rideUIState = DriverRideUIState.idle;
@@ -263,7 +282,15 @@ debugPrint("📍 Parsed pickup: $_pickupLocation");
     _dropLocation = null;
     _routePoints.clear();
     _rideStatus = null;
-    setState(() {});
+    _activeRideData = null; // Clear data
+    if (mounted) setState(() {});
+  }
+  
+  // Helper to extract GeoPoint safely
+  GeoPoint? _getGeoPoint(dynamic loc) {
+    if (loc is GeoPoint) return loc;
+    if (loc is Map) return GeoPoint(loc['lat'], loc['lng']);
+    return null; 
   }
 
   // ───────────────── UI ─────────────────
@@ -284,19 +311,26 @@ debugPrint("📍 Parsed pickup: $_pickupLocation");
           dropLocation: _dropLocation,
           routePoints: _routePoints,
         ),
-  // if (_rideStatus == 'accepted' || _rideStatus == 'started')
-  if (_rideStatus != null &&
-    widget.activeRideId != null &&
-    (_rideStatus == 'accepted' || _rideStatus == 'started'))
-  DriverRideSheet(
-    rideStatus: _rideStatus!,
-    otpVerified: _otpVerified,
-    rideId: widget.activeRideId!,
-    rideOtp: _rideOtp ?? " ", // from Firestore
-    onVerifyOtp: _verifyOtp,
-    onCompleteRide: _completeRide,
-  ),
-
+        
+        // 🔥 DISPLAY RIDE SHEET
+        if (_rideStatus != null &&
+            widget.activeRideId != null &&
+            (_rideStatus == 'accepted' || _rideStatus == 'started'))
+          DriverRideSheet(
+            rideStatus: _rideStatus!,
+            otpVerified: _otpVerified,
+            rideId: widget.activeRideId!,
+            rideOtp: _rideOtp ?? "",
+            
+            // 🔥 FIXED: Accessing data from _activeRideData
+            dropAddress: _activeRideData?['dropAddress'] ?? "Destination",
+            dropLoc: _activeRideData != null 
+                ? GeoPoint(_activeRideData!['dropLat'], _activeRideData!['dropLng']) 
+                : null,
+            
+            onVerifyOtp: _verifyOtp,
+            onCompleteRide: _completeRide,
+          ),
       ],
     );
   }

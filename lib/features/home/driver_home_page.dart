@@ -1,13 +1,13 @@
-// lib/features/home/driver_home_page.dart
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:geolocator/geolocator.dart'; // 👈 ADD THIS IMPORT
+import 'package:geolocator/geolocator.dart';
 
-import 'tabs/home_tab.dart';
+// INTERNAL IMPORTS
+import 'tabs/home_tab.dart';     // ✅ Restored HomeTab usage
 import 'tabs/recent_tab.dart';
 import 'tabs/profile_tab.dart';
 import 'data/driver_ride_repository.dart';
@@ -27,13 +27,13 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   /// 🔥 ACTIVE RIDE ID (ONLY AFTER ACCEPT)
   String? _activeRideId;
+  String? _activeRideStatus;
 
   late final DriverRideRepository _rideRepo;
   StreamSubscription<DocumentSnapshot>? _activeRideSub;
-  String? _activeRideStatus;
-
+  
   // 📍 LOCATION STREAM SUBSCRIPTION
-  StreamSubscription<Position>? _positionStream; // 👈 ADD THIS
+  StreamSubscription<Position>? _positionStream;
 
   @override
   void initState() {
@@ -42,9 +42,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
       FirebaseFirestore.instance,
       FirebaseAuth.instance,
     );
-    if (_activeRideId != null) {
-      _listenToActiveRide(_activeRideId!);
-    }
+    // If we have an active ride stored or persisting, you might want to load it here
   }
 
   /* ---------------- ONLINE / OFFLINE ---------------- */
@@ -68,11 +66,16 @@ class _DriverHomePageState extends State<DriverHomePage> {
       // 🔴 GOING OFFLINE
       _rideRepo.stopListening();
       _stopLocationUpdates();  // 👈 STOP TRACKING
-      setState(() => _activeRideId = null);
+      
+      // Update Firestore to offline
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+         FirebaseFirestore.instance.collection('drivers').doc(user.uid).update({'isOnline': false});
+      }
     }
   }
 
-  /* ---------------- 📍 LOCATION LOGIC (NEW) ---------------- */
+  /* ---------------- 📍 LOCATION LOGIC ---------------- */
 
   Future<bool> _checkLocationPermission() async {
     LocationPermission permission = await Geolocator.checkPermission();
@@ -88,7 +91,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
     // Update location every 10 meters
     const locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
-      distanceFilter: 10, 
+      distanceFilter: 5, 
     );
 
     _positionStream = Geolocator.getPositionStream(locationSettings: locationSettings)
@@ -105,8 +108,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // 🔥 This updates the 'drivers' collection
-    // The User App listens to this specific document!
+    // Updates the 'drivers' collection for User App tracking
     await FirebaseFirestore.instance.collection('drivers').doc(user.uid).set({
       'location': GeoPoint(position.latitude, position.longitude),
       'heading': position.heading,
@@ -128,6 +130,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
       builder: (_) => RideRequestBottomSheet(
         pickup: data['pickupAddress'] ?? 'Unknown',
         drop: data['dropAddress'] ?? 'Unknown',
+        // price: '40',
+        price: (data['estimatedPrice'] ?? 0.0).toString(),
+        
 
         /// ❌ REJECT
         onReject: () async {
@@ -172,6 +177,13 @@ class _DriverHomePageState extends State<DriverHomePage> {
       setState(() {
         _activeRideStatus = data['status'];
       });
+      
+      // Logic to clear active ride if cancelled or completed
+      if (data['status'] == 'completed' || data['status'] == 'cancelled') {
+         if (data['status'] == 'cancelled') {
+            setState(() => _activeRideId = null);
+         }
+      }
     });
   }
 
@@ -183,11 +195,12 @@ class _DriverHomePageState extends State<DriverHomePage> {
       body: IndexedStack(
         index: _currentIndex,
         children: [
+          // ✅ Restored HomeTab Usage
           HomeTab(
             isOnline: _isOnline,
             activeRideId: _activeRideId,
             activeRideStatus: _activeRideStatus,
-            onToggleOnline: _toggleOnlineStatus,
+            onToggleOnline: _toggleOnlineStatus, 
           ),
           RecentTab(),
           const ProfileTab(),

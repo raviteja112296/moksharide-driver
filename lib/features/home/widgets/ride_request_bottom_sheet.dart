@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 
-class RideRequestBottomSheet extends StatelessWidget {
+class RideRequestBottomSheet extends StatefulWidget {
   final String pickup;
   final String drop;
+  final String price; // 🔥 Added Price
+  final String distance; // 🔥 Added Distance
   final VoidCallback onAccept;
   final VoidCallback onReject;
 
@@ -10,196 +13,172 @@ class RideRequestBottomSheet extends StatelessWidget {
     super.key,
     required this.pickup,
     required this.drop,
+    // this.price = "₹120", // Default for testing
+    required this.price,
+    this.distance = "1.5 km", // Default for testing
     required this.onAccept,
     required this.onReject,
   });
 
   @override
+  State<RideRequestBottomSheet> createState() => _RideRequestBottomSheetState();
+}
+
+class _RideRequestBottomSheetState extends State<RideRequestBottomSheet> with SingleTickerProviderStateMixin {
+  late AnimationController _timerController;
+
+  @override
+  void initState() {
+    super.initState();
+    // ⏳ 30 Second Timer for Urgency
+    _timerController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 30),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _timerController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
-      height: 440,
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      padding: const EdgeInsets.all(24),
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 20)],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _handle(),
-
-          const SizedBox(height: 12),
-
+          // 1. HEADER: Timer & Title
           Row(
-            children: const [
-              Icon(Icons.directions_car, color: Colors.green),
-              SizedBox(width: 8),
-              Text(
-                'New Ride Request',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                ),
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("New Request", style: TextStyle(color: Colors.grey, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text(widget.price, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.green)),
+                      const SizedBox(width: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(6)),
+                        child: Text(widget.distance, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              // Circular Timer
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: 50, height: 50,
+                    child: CircularProgressIndicator(
+                      value: 0.7, // Static for now, or connect to controller
+                      backgroundColor: Colors.grey.shade200,
+                      color: Colors.orange,
+                      strokeWidth: 4,
+                    ),
+                  ),
+                  const Text("30s", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                ],
               ),
             ],
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
 
-          _routeCard(),
+          // 2. ROUTE VISUALIZATION (Professional Connector Line)
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Timeline Line
+                Column(
+                  children: [
+                    const Icon(Icons.circle, size: 12, color: Colors.green),
+                    Expanded(child: Container(width: 2, color: Colors.grey.shade300)),
+                    const Icon(Icons.square, size: 12, color: Colors.red),
+                  ],
+                ),
+                const SizedBox(width: 16),
+                
+                // Addresses
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _addressItem("PICKUP", widget.pickup),
+                      const SizedBox(height: 20),
+                      _addressItem("DROP-OFF", widget.drop),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
 
-          const Spacer(),
+          const SizedBox(height: 30),
 
+          // 3. ACTION BUTTONS
           Row(
             children: [
+              // Reject Button (Smaller)
               Expanded(
-                child: OutlinedButton(
-                  onPressed: onReject,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.red,
-                    side: const BorderSide(color: Colors.red),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                flex: 1,
+                child: TextButton(
+                  onPressed: widget.onReject,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    backgroundColor: Colors.grey.shade100,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
-                  child: const Text(
-                    'REJECT',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
+                  child: const Text("DECLINE", style: TextStyle(color: Colors.black54, fontWeight: FontWeight.bold)),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 16),
+              // Accept Button (Massive & Prominent)
               Expanded(
+                flex: 2,
                 child: ElevatedButton(
-                  onPressed: onAccept,
+                  onPressed: widget.onAccept,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    backgroundColor: Colors.black, // High contrast
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
                   ),
-                  child: const Text(
-                    'ACCEPT RIDE',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                    ),
-                  ),
+                  child: const Text("ACCEPT RIDE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 10),
         ],
       ),
     );
   }
 
-  // ───────── Handle ─────────
-  Widget _handle() => Center(
-        child: Container(
-          width: 40,
-          height: 4,
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade300,
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-      );
-
-  // ───────── Route Card ─────────
-  Widget _routeCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          _locationRow(
-            icon: Icons.my_location,
-            color: Colors.green,
-            label: "Pickup",
-            text: pickup,
-          ),
-
-          const SizedBox(height: 12),
-
-          _dottedDivider(),
-
-          const SizedBox(height: 12),
-
-          _locationRow(
-            icon: Icons.location_on,
-            color: Colors.red,
-            label: "Drop",
-            text: drop,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ───────── Location Row ─────────
-  Widget _locationRow({
-    required IconData icon,
-    required Color color,
-    required String label,
-    required String text,
-  }) {
-    return Row(
+  Widget _addressItem(String label, String address) {
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: color),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                text,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
+        Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.bold, letterSpacing: 1)),
+        const SizedBox(height: 4),
+        Text(address, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87), maxLines: 2, overflow: TextOverflow.ellipsis),
       ],
-    );
-  }
-
-  // ───────── Divider ─────────
-  Widget _dottedDivider() {
-    return Row(
-      children: List.generate(
-        20,
-        (index) => Expanded(
-          child: Container(
-            height: 1,
-            margin: const EdgeInsets.symmetric(horizontal: 2),
-            color: Colors.grey.shade300,
-          ),
-        ),
-      ),
     );
   }
 }

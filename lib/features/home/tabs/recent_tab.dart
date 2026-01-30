@@ -1,251 +1,258 @@
-// // lib/features/home/tabs/recent_tab.dart
-// import 'package:flutter/material.dart';
-// import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'package:firebase_auth/firebase_auth.dart';
-
-
-// class RecentTab extends StatelessWidget {
-//   const RecentTab({super.key});
-
-//   @override
-//   Widget build(BuildContext context) {
-//     final user = FirebaseAuth.instance.currentUser;
-    
-//     return Scaffold(
-//       body: SafeArea(
-//         child: Column(
-//           children: [
-//             // 🔥 Filter Header
-//             Container(
-//               padding: EdgeInsets.all(20),
-//               child: Row(
-//                 children: [
-//                   Expanded(
-//                     child: Container(
-//                       padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-//                       decoration: BoxDecoration(
-//                         color: Colors.grey[100],
-//                         borderRadius: BorderRadius.circular(12),
-//                       ),
-//                       child: Row(
-//                         children: [
-//                           Icon(Icons.search, color: Colors.grey[600]),
-//                           SizedBox(width: 12),
-//                           Text('Recent rides', style: TextStyle(color: Colors.grey[600])),
-//                         ],
-//                       ),
-//                     ),
-//                   ),
-//                   SizedBox(width: 12),
-//                   Container(
-//                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-//                     decoration: BoxDecoration(
-//                       color: Colors.blueAccent,
-//                       borderRadius: BorderRadius.circular(12),
-//                     ),
-//                     child: Text(
-//                       DateFormat('MMM yyyy').format(DateTime.now()),
-//                       style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-//                     ),
-//                   ),
-//                 ],
-//               ),
-//             ),
-            
-//             // 🔥 Rides List
-//             Expanded(
-//               child: StreamBuilder<QuerySnapshot>(
-//                 stream: user != null 
-//                     ? FirebaseFirestore.instance
-//                         .collection('rides')
-//                         .where('driverId', isEqualTo: user.uid)
-//                         .orderBy('createdAt', descending: true)
-//                         .limit(50)
-//                         .snapshots()
-//                     : Stream.empty(),
-//                 builder: (context, snapshot) {
-//                   if (snapshot.connectionState == ConnectionState.waiting) {
-//                     return Center(child: CircularProgressIndicator());
-//                   }
-                  
-//                   if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-//                     return Center(
-//                       child: Column(
-//                         mainAxisAlignment: MainAxisAlignment.center,
-//                         children: [
-//                           Icon(Icons.history, size: 80, color: Colors.grey[400]),
-//                           SizedBox(height: 16),
-//                           Text(
-//                             'No recent rides',
-//                             style: TextStyle(fontSize: 20, color: Colors.grey[600]),
-//                           ),
-//                           Text(
-//                             'Completed rides will appear here',
-//                             style: TextStyle(color: Colors.grey[500]),
-//                           ),
-//                         ],
-//                       ),
-//                     );
-//                   }
-                  
-//                   return ListView.builder(
-//                     padding: EdgeInsets.symmetric(horizontal: 20),
-//                     itemCount: snapshot.data!.docs.length,
-//                     itemBuilder: (context, index) {
-//                       final ride = snapshot.data!.docs[index];
-//                       final data = ride.data() as Map<String, dynamic>;
-                      
-//                       return _RideCard(ride: data, docId: ride.id);
-//                     },
-//                   );
-//                 },
-//               ),
-//             ),
-//           ],
-//         ),
-//       ),
-//     );
-//   }
-// }
-
-// class _RideCard extends StatelessWidget {
-//   final Map<String, dynamic> ride;
-//   final String docId;
-
-//   const _RideCard({required this.ride, required this.docId});
-
-//   @override
-//   Widget build(BuildContext context) {
-//     final status = ride['status']?.toString() ?? 'unknown';
-//     final createdAt = (ride['createdAt'] as Timestamp?)?.toDate();
-//     final amount = ride['driverAmount']?.toString() ?? '₹0';
-    
-//     return Container(
-//       margin: EdgeInsets.only(bottom: 16),
-//       child: Card(
-//         elevation: 4,
-//         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-//         child: Padding(
-//           padding: EdgeInsets.all(20),
-//           child: Column(
-//             crossAxisAlignment: CrossAxisAlignment.start,
-//             children: [
-//               // 🔥 Ride Header
-//               Row(
-//                 children: [
-//                   Container(
-//                     padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-//                     decoration: BoxDecoration(
-//                       color: _getStatusColor(status),
-//                       borderRadius: BorderRadius.circular(20),
-//                     ),
-//                     child: Text(
-//                       _getStatusText(status),
-//                       style: TextStyle(
-//                         color: Colors.white,
-//                         fontWeight: FontWeight.bold,
-//                         fontSize: 12,
-//                       ),
-//                     ),
-//                   ),
-//                   Spacer(),
-//                   Text(
-//                     amount,
-//                     style: TextStyle(
-//                       fontSize: 20,
-//                       fontWeight: FontWeight.bold,
-//                       color: Colors.green,
-//                     ),
-//                   ),
-//                 ],
-//               ),
-//               SizedBox(height: 16),
-              
-//               // 🔥 Route Info
-//               Row(
-//                 children: [
-//                   Icon(Icons.my_location, color: Colors.grey[600], size: 20),
-//                   SizedBox(width: 8),
-//                   Expanded(
-//                     child: Text(
-//                       ride['pickupAddress']?.toString() ?? 'Pickup location',
-//                       style: TextStyle(fontWeight: FontWeight.w500),
-//                       maxLines: 1,
-//                       overflow: TextOverflow.ellipsis,
-//                     ),
-//                   ),
-//                 ],
-//               ),
-//               SizedBox(height: 8),
-//               Row(
-//                 children: [
-//                   Icon(Icons.location_on, color: Colors.green[600], size: 20),
-//                   SizedBox(width: 8),
-//                   Expanded(
-//                     child: Text(
-//                       ride['destinationAddress']?.toString() ?? 'Destination',
-//                       style: TextStyle(fontWeight: FontWeight.w500),
-//                       maxLines: 1,
-//                       overflow: TextOverflow.ellipsis,
-//                     ),
-//                   ),
-//                 ],
-//               ),
-//               SizedBox(height: 16),
-              
-//               // 🔥 Bottom Details
-//               Divider(),
-//               Row(
-//                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                 children: [
-//                   Text(
-//                     createdAt != null 
-//                         ? DateFormat('MMM dd, HH:mm').format(createdAt) 
-//                         : 'Unknown time',
-//                     style: TextStyle(color: Colors.grey[600]),
-//                   ),
-//                   Text(
-//                     '${ride['distance']?.toStringAsFixed(1) ?? '0'} km',
-//                     style: TextStyle(
-//                       fontWeight: FontWeight.bold,
-//                       color: Colors.blueAccent,
-//                     ),
-//                   ),
-//                 ],
-//               ),
-//             ],
-//           ),
-//         ),
-//       ),
-//     );
-//   }
-
-//   Color _getStatusColor(String status) {
-//     switch (status) {
-//       case 'completed': return Colors.green;
-//       case 'cancelled': return Colors.red;
-//       case 'confirmed': return Colors.blue;
-//       default: return Colors.orange;
-//     }
-//   }
-
-//   String _getStatusText(String status) {
-//     switch (status) {
-//       case 'completed': return 'Completed';
-//       case 'cancelled': return 'Cancelled';
-//       case 'confirmed': return 'Confirmed';
-//       case 'pending': return 'Pending';
-//       default: return status.toUpperCase();
-//     }
-//   }
-// }
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 
 class RecentTab extends StatelessWidget {
   const RecentTab({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Container();
+    final user = FirebaseAuth.instance.currentUser;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F8), // Light grey background for contrast
+      appBar: AppBar(
+        title: const Text("Trip History", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: false,
+        actions: [
+          // Date Filter Badge
+          Container(
+            margin: const EdgeInsets.only(right: 16, top: 12, bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.blue.shade100),
+            ),
+            child: Center(
+              child: Text(
+                DateFormat('MMM yyyy').format(DateTime.now()),
+                style: TextStyle(color: Colors.blue.shade800, fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+            ),
+          )
+        ],
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: user != null
+            ? FirebaseFirestore.instance
+                .collection('ride_requests')
+                .where('assignedDriverId', isEqualTo: user.uid) // Ensure we verify ASSIGNED driver
+                .orderBy('createdAt', descending: true)
+                .limit(50)
+                .snapshots()
+            : Stream.empty(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return _buildEmptyState();
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: snapshot.data!.docs.length,
+            itemBuilder: (context, index) {
+              final ride = snapshot.data!.docs[index];
+              final data = ride.data() as Map<String, dynamic>;
+              return _RideCard(ride: data);
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: Colors.grey.shade100, shape: BoxShape.circle),
+            child: Icon(Icons.history_toggle_off, size: 60, color: Colors.grey.shade400),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No rides yet',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey.shade700),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Completed trips will appear here.',
+            style: TextStyle(color: Colors.grey.shade500),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RideCard extends StatelessWidget {
+  final Map<String, dynamic> ride;
+
+  const _RideCard({required this.ride});
+
+  @override
+  Widget build(BuildContext context) {
+    // Safely extract data
+    final status = ride['status']?.toString() ?? 'unknown';
+    final createdAt = (ride['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+    
+    // Price Formatting
+    final priceVal = ride['estimatedPrice'] ?? 0;
+    final amount = NumberFormat.currency(symbol: '₹', decimalDigits: 0).format(priceVal);
+
+    // Addresses
+    final pickup = ride['pickup'] ?? ride['pickupAddress'] ?? 'Unknown Pickup';
+    final drop = ride['drop'] ?? ride['dropAddress'] ?? 'Unknown Drop';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            // 1. Header: Date & Price
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  DateFormat('EEE, dd MMM • hh:mm a').format(createdAt),
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+                Text(
+                  amount,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+                ),
+              ],
+            ),
+            
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Divider(height: 1),
+            ),
+
+            // 2. Timeline (Pickup -> Drop)
+            IntrinsicHeight(
+              child: Row(
+                children: [
+                  // Timeline Line Column
+                  Column(
+                    children: [
+                      const Icon(Icons.circle, size: 10, color: Colors.green),
+                      Expanded(
+                        child: Container(
+                          width: 2,
+                          color: Colors.grey.shade200,
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                        ),
+                      ),
+                      const Icon(Icons.square, size: 10, color: Colors.redAccent),
+                    ],
+                  ),
+                  const SizedBox(width: 12),
+                  
+                  // Address Text Column
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildAddressText("Pickup", pickup),
+                        const SizedBox(height: 16),
+                        _buildAddressText("Drop-off", drop),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // 3. Footer: Status & Distance
+            Row(
+              children: [
+                _buildStatusChip(status),
+                const Spacer(),
+                const Icon(Icons.route, size: 16, color: Colors.grey),
+                const SizedBox(width: 4),
+                Text(
+                  '${ride['distance']?.toStringAsFixed(1) ?? '1.2'} km',
+                  style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddressText(String label, String address) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(address, 
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.black87),
+          maxLines: 1, 
+          overflow: TextOverflow.ellipsis
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusChip(String status) {
+    Color bg;
+    Color text;
+    String label;
+
+    switch (status) {
+      case 'completed':
+        bg = Colors.green.shade50;
+        text = Colors.green.shade700;
+        label = "Completed";
+        break;
+      case 'cancelled':
+        bg = Colors.red.shade50;
+        text = Colors.red.shade700;
+        label = "Cancelled";
+        break;
+      case 'started':
+      case 'arrived':
+        bg = Colors.orange.shade50;
+        text = Colors.orange.shade800;
+        label = "In Progress";
+        break;
+      default:
+        bg = Colors.grey.shade100;
+        text = Colors.grey.shade700;
+        label = status.toUpperCase();
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: text, fontWeight: FontWeight.bold, fontSize: 11),
+      ),
+    );
   }
 }
