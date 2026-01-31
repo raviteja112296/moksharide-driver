@@ -50,6 +50,11 @@ dependencies:
   pinput: ^6.0.1
   url_launcher: ^6.3.2
   intl: ^0.20.2
+  lottie: ^3.3.2
+  image_picker: ^1.2.1
+  firebase_storage: ^13.0.6
+  share_plus: ^12.0.1
+  flutter_tts: ^4.2.5
 
 dev_dependencies:
   flutter_test:
@@ -76,7 +81,7 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/images/
-    - assets/
+    - assets/animations/
     - android/app/src/main/res/raw/ride_alert.mp3
 
   # An image asset can refer to one or more resolution-specific "variants", see

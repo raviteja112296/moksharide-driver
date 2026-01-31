@@ -2,24 +2,23 @@ import 'dart:typed_data';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-/// ----------------------------------
-/// LOCAL NOTIFICATION SERVICE
-/// ----------------------------------
 class LocalNotificationService {
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
 
+  // 🔔 Channel ID must match Node.js "channelId"
   static const AndroidNotificationChannel _rideChannel =
       AndroidNotificationChannel(
-    'ride_channel', // MUST match server android_channel_id
+    'ride_channel_v3', 
     'Ride Requests',
     description: 'Incoming ride alerts',
     importance: Importance.max,
     playSound: true,
+    // ⚠️ Make sure 'ride_alert.mp3' exists in android/app/src/main/res/raw/
+    // If you don't have a custom sound, remove this line or use standard sound.
     sound: RawResourceAndroidNotificationSound('ride_alert'),
   );
 
-  /// Call this ONCE in main()
   static Future<void> initialize() async {
     const AndroidInitializationSettings androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -29,13 +28,29 @@ class LocalNotificationService {
 
     await _notifications.initialize(settings);
 
+    // Create the channel on the device
     await _notifications
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(_rideChannel);
+        
+    // 🔥 CALL THIS HERE TO START LISTENING
+    _setupForegroundListeners();
   }
 
-  /// ✅ Use ONLY when app is in FOREGROUND
+  // 👂 Listener for Foreground Messages
+  static void _setupForegroundListeners() {
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      print("🔔 FOREGROUND NOTIFICATION RECEIVED: ${message.notification?.title}");
+      
+      // // Show the popup manually
+      // showRideAlert(
+      //   title: message.notification?.title ?? "New Ride Request",
+      //   body: message.notification?.body ?? "Tap to view details",
+      // );
+    });
+  }
+
   static Future<void> showRideAlert({
     required String title,
     required String body,
@@ -49,6 +64,7 @@ class LocalNotificationService {
       playSound: true,
       sound: _rideChannel.sound,
       enableVibration: true,
+      // Vibration pattern: [delay, vibrate, pause, vibrate]
       vibrationPattern: Int64List.fromList([0, 500, 1000, 500]),
     );
 
@@ -60,24 +76,3 @@ class LocalNotificationService {
     );
   }
 }
-
-/// ----------------------------------
-/// FCM CONFIGURATION
-/// ----------------------------------
-
-/// ❌ DO NOT show local notifications here
-/// Background & killed state MUST rely on SERVER sound
-@pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Intentionally empty
-}
-
-/// Foreground FCM listener (SAFE)
-// void setupFCMListeners() {
-//   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-//     LocalNotificationService.showRideAlert(
-//       title: message.notification?.title ?? "🚕 New Ride Request",
-//       body: message.notification?.body ?? "Tap to accept the ride",
-//     );
-//   });
-// }
