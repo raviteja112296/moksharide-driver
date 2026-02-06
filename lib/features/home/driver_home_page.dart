@@ -22,7 +22,7 @@ class DriverHomePage extends StatefulWidget {
 
 class _DriverHomePageState extends State<DriverHomePage> {
   int _currentIndex = 0;
-  bool _isOnline = false;
+  bool _isOnline = true;
   bool _sheetOpen = false;
 
   /// 🔥 ACTIVE RIDE ID (ONLY AFTER ACCEPT)
@@ -57,18 +57,22 @@ class _DriverHomePageState extends State<DriverHomePage> {
     }
 
     setState(() => _isOnline = !_isOnline);
-
+    final user = FirebaseAuth.instance.currentUser;
     if (_isOnline) {
       // 🟢 GOING ONLINE
       _rideRepo.listenForRideRequests(onRideFound: _showRideRequestSheet);
       _startLocationUpdates(); // 👈 START TRACKING
+      // Update Firestore to offline
+      if (user != null) {
+         FirebaseFirestore.instance.collection('drivers').doc(user.uid).update({'isOnline': true});
+      }
     } else {
       // 🔴 GOING OFFLINE
       _rideRepo.stopListening();
       _stopLocationUpdates();  // 👈 STOP TRACKING
       
       // Update Firestore to offline
-      final user = FirebaseAuth.instance.currentUser;
+      // final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
          FirebaseFirestore.instance.collection('drivers').doc(user.uid).update({'isOnline': false});
       }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:moksharide_driver/features/home/driver_home_page.dart';
 import 'package:moksharide_driver/features/auth/data/auth_service.dart';
+import 'package:moksharide_driver/screens/vehicle_selection_screen.dart';
 
 class DriverSignInPage extends StatefulWidget {
   const DriverSignInPage({super.key});
@@ -160,21 +161,41 @@ Future<void> _loginWithGoogle() async {
     final fcmToken = await FirebaseMessaging.instance.getToken();
     if (fcmToken == null) throw Exception("FCM token is null");
 
-    // 4️⃣ Save token to Firestore
-    await FirebaseFirestore.instance.collection('drivers').doc(user.uid).set({
+    // 4️⃣ Save token to Firestore (Merge ensures we don't overwrite existing vehicle data)
+    final driverDocRef = FirebaseFirestore.instance.collection('drivers').doc(user.uid);
+    
+    await driverDocRef.set({
       'fcmToken': fcmToken,
       'isOnline': true,
       'updatedAt': FieldValue.serverTimestamp(),
+      // We do NOT set 'vehicle_type' here, to preserve old data
     }, SetOptions(merge: true));
 
     print('✅ FCM: Token saved for ${user.uid}');
 
-    // 5️⃣ Navigate to home
+    // 🆕 4.5️⃣ Check if Vehicle Type is already selected
+    DocumentSnapshot docSnapshot = await driverDocRef.get();
+    
+    // Check if the field 'vehicle_type' exists and is not null
+    bool isVehicleSetup = docSnapshot.exists && 
+                          (docSnapshot.data() as Map<String, dynamic>).containsKey('vehicle_type') &&
+                          docSnapshot.get('vehicle_type') != null;
+
+    // 5️⃣ Conditional Navigation
     if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const DriverHomePage()),
-      );
+      if (isVehicleSetup) {
+        // ✅ Already setup? Go straight to Home
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const DriverHomePage()),
+        );
+      } else {
+        // 🆕 New driver? Go to Vehicle Selection first
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const VehicleSelectionScreen()),
+        );
+      }
     }
   } catch (e) {
     print('❌ Login error: $e');
