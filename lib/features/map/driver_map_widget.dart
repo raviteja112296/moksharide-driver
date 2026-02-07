@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:typed_data';
-import 'dart:ui' as ui; // 1. Needed for drawing the custom arrow
+import 'dart:ui' as ui;
+import 'dart:math' as math; // Required for Snap Math
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart'; // Required for distance calculations
 
 class DriverMapWidget extends StatefulWidget {
   final LatLng driverLocation;
@@ -10,9 +12,7 @@ class DriverMapWidget extends StatefulWidget {
   final double heading;
   final LatLng? pickupLocation;
   final LatLng? dropLocation;
-
-  // 🔥 We accept points from parent, or we will calculate a straight line below
-  final List<LatLng> routePoints; 
+  final List<LatLng> routePoints;
 
   const DriverMapWidget({
     super.key,
@@ -21,7 +21,7 @@ class DriverMapWidget extends StatefulWidget {
     required this.heading,
     this.pickupLocation,
     this.dropLocation,
-    required this.routePoints, 
+    required this.routePoints,
   });
 
   @override
@@ -30,39 +30,95 @@ class DriverMapWidget extends StatefulWidget {
 
 class _DriverMapWidgetState extends State<DriverMapWidget> {
   final Completer<GoogleMapController> _controller = Completer();
-  BitmapDescriptor? _driverIcon; // 2. Store the custom icon
+  BitmapDescriptor? _driverIcon;
 
   @override
   void initState() {
     super.initState();
-    _loadCustomMarker(); // 3. Build the icon when app starts
+    _loadCustomMarker();
   }
 
   @override
   void didUpdateWidget(covariant DriverMapWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // Animate Camera if Driver Moves
+    // 🔥 FIX 1: Animate Camera SMOOTHLY without resetting Zoom
     if (widget.driverLocation != oldWidget.driverLocation) {
-      _animateCamera(widget.driverLocation, widget.heading);
+      // We calculate the snapped position for the camera too, so it centers on the road
+      LatLng targetPos = _getSnappedPosition();
+      _animateCamera(targetPos);
     }
   }
 
-  Future<void> _animateCamera(LatLng pos, double heading) async {
+  // 🎥 FIX 1: The Camera Logic
+  Future<void> _animateCamera(LatLng pos) async {
     final GoogleMapController controller = await _controller.future;
+    
+    // Use newLatLng to KEEP the user's current zoom level
     controller.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target: pos,
-          zoom: 17.0,
-          bearing: heading,
-          tilt: 45.0,
-        ),
-      ),
+      CameraUpdate.newLatLng(pos),
     );
   }
 
-  // 🎨 4. CREATE THE PROFESSIONAL ARROW MARKER
+  // 🧮 FIX 2: The "Snap-to-Road" Math Engine
+  LatLng _getSnappedPosition() {
+    // If no route exists, we can't snap. Return raw GPS.
+    if (widget.routePoints.isEmpty) return widget.driverLocation;
+
+    return _getProjectedPointOnPolyline(widget.driverLocation, widget.routePoints);
+  }
+
+  LatLng _getProjectedPointOnPolyline(LatLng pos, List<LatLng> polyline) {
+    if (polyline.length < 2) return pos;
+
+    double minDist = double.infinity;
+    LatLng snappedPos = pos;
+
+    // Optimization: Only check closest 20 points (Driver is usually near the start/middle)
+    // You can increase this if routes are very complex
+    int searchLimit = math.min(polyline.length - 1, 50);
+
+    for (int i = 0; i < searchLimit; i++) {
+      LatLng p1 = polyline[i];
+      LatLng p2 = polyline[i + 1];
+      
+      LatLng projection = _projectPointOnSegment(pos, p1, p2);
+      double distance = Geolocator.distanceBetween(
+        pos.latitude, pos.longitude, 
+        projection.latitude, projection.longitude
+      );
+
+      if (distance < minDist) {
+        minDist = distance;
+        snappedPos = projection;
+      }
+    }
+
+    // ⚠️ Safety: If driver is > 40 meters away from road, assume they are off-route.
+    // Don't snap them, show raw location.
+    if (minDist > 40) {
+      return pos; 
+    }
+
+    return snappedPos;
+  }
+
+  LatLng _projectPointOnSegment(LatLng p, LatLng a, LatLng b) {
+    double apX = p.latitude - a.latitude;
+    double apY = p.longitude - a.longitude;
+    double abX = b.latitude - a.latitude;
+    double abY = b.longitude - a.longitude;
+
+    double ab2 = abX * abX + abY * abY;
+    double apAb = apX * abX + apY * abY;
+    double t = apAb / ab2;
+
+    if (t < 0) return a;
+    if (t > 1) return b;
+    return LatLng(a.latitude + abX * t, a.longitude + abY * t);
+  }
+
+  // 🎨 Custom Marker Builder
   Future<void> _loadCustomMarker() async {
     final icon = await _createArrowMarker();
     setState(() {
@@ -73,33 +129,27 @@ class _DriverMapWidgetState extends State<DriverMapWidget> {
   Future<BitmapDescriptor> _createArrowMarker() async {
     final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(pictureRecorder);
-    
-    // Size of the marker (60x60 is a good size for high-res screens)
-    const double size = 60.0;
+    const double size = 70.0; // Slightly larger for visibility
     
     final Paint paint = Paint()
-      ..color = Colors.blueAccent // The main arrow color
+      ..color = Colors.blue[700]! 
       ..style = PaintingStyle.fill;
     
     final Paint borderPaint = Paint()
       ..color = Colors.white
-      ..strokeWidth = 4.0
+      ..strokeWidth = 3.0
       ..style = PaintingStyle.stroke;
 
-    // Draw the Navigation Arrow Shape (Triangle)
     final Path path = Path();
-    path.moveTo(size / 2, 0);          // Top Center (Tip)
-    path.lineTo(size, size);           // Bottom Right
-    path.lineTo(size / 2, size * 0.7); // Bottom Center (Indented)
-    path.lineTo(0, size);              // Bottom Left
+    path.moveTo(size / 2, 0);          
+    path.lineTo(size, size);           
+    path.lineTo(size / 2, size * 0.75); 
+    path.lineTo(0, size);             
     path.close();
 
-    // Draw White Border (for contrast on map)
     canvas.drawPath(path, borderPaint);
-    // Draw Blue Fill
     canvas.drawPath(path, paint);
 
-    // Convert Canvas to Image
     final ui.Image image = await pictureRecorder.endRecording().toImage(size.toInt(), size.toInt());
     final ByteData? data = await image.toByteData(format: ui.ImageByteFormat.png);
 
@@ -108,23 +158,26 @@ class _DriverMapWidgetState extends State<DriverMapWidget> {
 
   @override
   Widget build(BuildContext context) {
+    // 🔥 Calculate the clean position once per build
+    final LatLng displayPosition = _getSnappedPosition();
+
     return GoogleMap(
       initialCameraPosition: CameraPosition(
         target: widget.driverLocation,
-        zoom: 15.0,
+        zoom: 16.0,
       ),
       mapType: MapType.normal,
       zoomControlsEnabled: false,
       myLocationButtonEnabled: false,
       compassEnabled: false,
-      trafficEnabled: widget.isOnline,
+      trafficEnabled: false, // Turn off traffic to reduce visual noise
 
       onMapCreated: (GoogleMapController controller) {
         _controller.complete(controller);
       },
 
       polylines: _buildPolylines(),
-      markers: _buildMarkers(),
+      markers: _buildMarkers(displayPosition), // Pass snapped pos
     );
   }
 
@@ -143,7 +196,7 @@ class _DriverMapWidgetState extends State<DriverMapWidget> {
       };
     }
 
-    // FALLBACK: Straight Line Logic
+    // Fallback Line
     List<LatLng> straightLinePoints = [];
     if (widget.pickupLocation != null) {
       straightLinePoints.add(widget.driverLocation);
@@ -158,55 +211,51 @@ class _DriverMapWidgetState extends State<DriverMapWidget> {
         Polyline(
           polylineId: const PolylineId('direct_line'),
           points: straightLinePoints,
-          color: Colors.blue, 
-          width: 5,
+          color: Colors.grey, 
+          width: 4,
           patterns: [PatternItem.dash(10), PatternItem.gap(10)], 
-          jointType: JointType.round,
-          startCap: Cap.roundCap,
-          endCap: Cap.roundCap,
         ),
       };
     }
     return {};
   }
 
-  Set<Marker> _buildMarkers() {
+  Set<Marker> _buildMarkers(LatLng displayPos) {
     Set<Marker> markers = {};
 
-    // 🚗 DRIVER MARKER (Using Custom Arrow)
+    // 🚗 DRIVER MARKER (Uses Snapped Position)
     markers.add(
       Marker(
         markerId: const MarkerId('driver'),
-        position: widget.driverLocation,
+        position: displayPos, // 👈 KEY CHANGE: Using snapped position
         rotation: widget.heading,
-        flat: true, // Makes it lie flat on the map like a real car/arrow
-        anchor: const Offset(0.5, 0.5), // Center point of rotation
-        zIndex: 2, // Always on top
-        // Use custom icon if loaded, otherwise fallback to blue dot
+        flat: true,
+        anchor: const Offset(0.5, 0.5),
+        zIndex: 100, // Top most
         icon: _driverIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
       ),
     );
 
-    // 🟢 PICKUP MARKER
+    // 🟢 PICKUP
     if (widget.pickupLocation != null) {
       markers.add(
         Marker(
           markerId: const MarkerId('pickup'),
           position: widget.pickupLocation!,
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-          infoWindow: const InfoWindow(title: "Pickup Here"),
+          infoWindow: const InfoWindow(title: "Pickup"),
         ),
       );
     }
 
-    // 🔴 DROP MARKER
+    // 🔴 DROP
     if (widget.dropLocation != null) {
       markers.add(
         Marker(
           markerId: const MarkerId('drop'),
           position: widget.dropLocation!,
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          infoWindow: const InfoWindow(title: "Drop Here"),
+          infoWindow: const InfoWindow(title: "Drop"),
         ),
       );
     }

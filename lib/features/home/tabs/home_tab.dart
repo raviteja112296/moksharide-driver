@@ -206,7 +206,6 @@ class HomeTab extends StatelessWidget {
           ),
         ],
       ),
-      
       body: DriverMapContainer(
         isOnline: isOnline,
         activeRideId: activeRideId,
