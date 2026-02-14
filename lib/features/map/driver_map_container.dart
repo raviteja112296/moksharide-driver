@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_compass/flutter_compass.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -38,7 +39,11 @@ class _DriverMapContainerState extends State<DriverMapContainer> {
   List<LatLng> _routePoints = [];
 
   String? _rideStatus;
-  double _heading = 0.0;
+  double _heading=0.0;
+  double _gpsHeading = 0.0;
+double _compassHeading = 0.0;
+double _finalHeading = 0.0;
+
   bool _otpVerified = false;
   
   // 🔥 NEW: Store full ride data to access address/details later
@@ -60,7 +65,7 @@ class _DriverMapContainerState extends State<DriverMapContainer> {
   void initState() {
     super.initState();
     _initLocation();
-
+    _startCompass();
     if (widget.activeRideId != null) {
       _listenToRide(widget.activeRideId!);
     }
@@ -88,6 +93,13 @@ class _DriverMapContainerState extends State<DriverMapContainer> {
     _rideSub?.cancel();
     super.dispose();
   }
+void _startCompass() {
+  FlutterCompass.events?.listen((event) {
+    if (event.heading != null) {
+      _compassHeading = event.heading!;
+    }
+  });
+}
 
   // ───────────────── OTP & COMPLETE ─────────────────
 
@@ -141,29 +153,41 @@ class _DriverMapContainerState extends State<DriverMapContainer> {
     setState(() => _currentLocation = initial);
     _startLiveTracking();
   }
+double _normalize(double angle) {
+  return (angle % 360 + 360) % 360;
+}
 
-  void _startLiveTracking() {
-    const settings = LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 5, // Increased slightly to reduce jitter
-    );
+void _startLiveTracking() {
+  const settings = LocationSettings(
+    accuracy: LocationAccuracy.high,
+    distanceFilter: 5,
+  );
 
-    _positionSub = Geolocator.getPositionStream(
-      locationSettings: settings,
-    ).listen((position) {
-      if (!mounted) return;
-      
-      setState(() {
-        _currentLocation = LatLng(position.latitude, position.longitude);
-        _heading = position.heading;
-      });
+  _positionSub = Geolocator.getPositionStream(
+    locationSettings: settings,
+  ).listen((position) {
+    if (!mounted) return;
 
-      _syncDriverLocation(position);
-      
-      // Only update route if we moved significantly (optional optimization)
-      _updateRoute();
+    _gpsHeading = position.heading;
+
+    // 🚀 Speed-based switching
+    if (position.speed > 3) {
+      _finalHeading = _gpsHeading;
+    } else {
+      _finalHeading = _compassHeading;
+    }
+
+    setState(() {
+      _currentLocation =
+          LatLng(position.latitude, position.longitude);
+      _heading = _normalize(_finalHeading);
     });
-  }
+
+    _syncDriverLocation(position);
+    _updateRoute();
+  });
+}
+
 
   // ───────────────── DRIVER LOCATION SYNC ─────────────────
 
@@ -329,7 +353,7 @@ class _DriverMapContainerState extends State<DriverMapContainer> {
                 : null,
             
             onVerifyOtp: _verifyOtp,
-            onCompleteRide: _completeRide,
+            onCompleteRide: _completeRide, pickupAddress: _activeRideData?['pickupAddress'] ?? "pickup", fareAmount: _activeRideData?['estimatedPrice'],
           ),
       ],
     );
