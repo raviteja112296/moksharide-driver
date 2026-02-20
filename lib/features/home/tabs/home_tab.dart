@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:moksharide_driver/features/home/tabs/DriverOffersPage.dart';
-import 'package:share_plus/share_plus.dart'; // 📦 ADDED SHARE
+import 'package:share_plus/share_plus.dart'; 
 import 'package:moksharide_driver/features/map/driver_map_container.dart';
-import 'package:moksharide_driver/features/home/tabs/driver_earnings_page.dart'; // 📦 IMPORT
+import 'package:moksharide_driver/features/home/tabs/driver_earnings_page.dart';
 
 class HomeTab extends StatelessWidget {
   final bool isOnline;
@@ -22,7 +22,6 @@ class HomeTab extends StatelessWidget {
     required this.activeRideStatus,
   });
 
-  // ... (Your existing _getGreeting method stays the same) ...
   String _getGreeting() {
     final hour = DateTime.now().hour;
     if (hour < 12) return 'Good Morning';
@@ -71,7 +70,6 @@ class HomeTab extends StatelessWidget {
                     color: Colors.green,
                     onTap: () {
                       Navigator.pop(context);
-                      // 🔗 SHARE LOGIC
                       Share.share('Join Moksha Ride as a Driver and earn ₹500 bonus! Use my code: DRV123. Download now: https://moksharide.com');
                     },
                   ),
@@ -97,13 +95,12 @@ class HomeTab extends StatelessWidget {
     );
   }
 
-  // 🔥 UPDATED LABEL ITEM TO SUPPORT CLICKS
   Widget _labelItem({
     required BuildContext context,
     required IconData icon,
     required String title,
     required Color color,
-    required VoidCallback onTap, // Added Callback
+    required VoidCallback onTap, 
   }) {
     return InkWell(
       onTap: onTap,
@@ -133,11 +130,14 @@ class HomeTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ... (Your Existing Build method stays exactly the same) ...
+    // 🔥 THE FIX: Calculate if the driver is currently on a ride
+    bool isOnRide = activeRideId != null && 
+                    activeRideId!.isNotEmpty && 
+                    activeRideStatus != 'completed' &&
+                    activeRideStatus != 'cancelled';
     return Scaffold(
-       extendBodyBehindAppBar: true,
-       appBar: AppBar(
-        // ... (Keep your exact existing AppBar code) ...
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
         toolbarHeight: 80,
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -155,7 +155,7 @@ class HomeTab extends StatelessWidget {
         ),
         leading: IconButton(
           icon: const Icon(Icons.menu, color: Colors.white, size: 28),
-          onPressed: () => _showQuickLabels(context), // This opens the sheet
+          onPressed: () => _showQuickLabels(context), 
         ),
         title: Padding(
           padding: const EdgeInsets.only(top: 8),
@@ -174,33 +174,57 @@ class HomeTab extends StatelessWidget {
           ),
         ),
         actions: [
+          // 🔥 THE LOCKED TOGGLE BUTTON
           GestureDetector(
             onTap: () {
-              HapticFeedback.heavyImpact();
-              onToggleOnline();
-            },
-            child: Container(
-              margin: const EdgeInsets.only(right: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isOnline ? [Colors.green, Colors.greenAccent] : [Colors.grey, Colors.grey.shade600],
-                ),
-                borderRadius: BorderRadius.circular(25),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 10, height: 10,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: isOnline ? Colors.green : Colors.grey, width: 2),
-                    ),
+              if (isOnRide) {
+                // 🛑 DISABLED STATE: Block toggle and show message
+                HapticFeedback.lightImpact();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('You cannot go offline during an active ride.'),
+                    backgroundColor: Colors.redAccent,
+                    behavior: SnackBarBehavior.floating,
+                    duration: Duration(seconds: 2),
                   ),
-                  const SizedBox(width: 8),
-                  Text(isOnline ? 'ONLINE' : 'OFFLINE', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ],
+                );
+              } else {
+                // ✅ ACTIVE STATE: Normal toggle
+                HapticFeedback.heavyImpact();
+                onToggleOnline();
+              }
+            },
+            child: Opacity(
+              opacity: isOnRide ? 0.7 : 1.0, // Dims the button if on a ride
+              child: Container(
+                margin: const EdgeInsets.only(right: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isOnline ? [Colors.green, Colors.greenAccent] : [Colors.grey, Colors.grey.shade600],
+                  ),
+                  borderRadius: BorderRadius.circular(25),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 10, height: 10,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: isOnline ? Colors.green : Colors.grey, width: 2),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(isOnline ? 'ONLINE' : 'OFFLINE', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    
+                    // 🔒 Show a small lock icon if the ride is active
+                    if (isOnRide) ...[
+                      const SizedBox(width: 6),
+                      const Icon(Icons.lock, color: Colors.white, size: 14),
+                    ],
+                  ],
+                ),
               ),
             ),
           ),

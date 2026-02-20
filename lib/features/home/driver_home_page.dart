@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
-
 // INTERNAL IMPORTS
 import 'tabs/home_tab.dart';     // ✅ Restored HomeTab usage
 import 'tabs/recent_tab.dart';
@@ -64,7 +63,11 @@ class _DriverHomePageState extends State<DriverHomePage> {
       _startLocationUpdates(); // 👈 START TRACKING
       // Update Firestore to offline
       if (user != null) {
-         FirebaseFirestore.instance.collection('drivers').doc(user.uid).update({'isOnline': true});
+         FirebaseFirestore.instance.collection('drivers').doc(user.uid).update(
+          {
+            'isOnline': true,
+            'mail':FirebaseAuth.instance.currentUser?.email
+            });
       }
     } else {
       // 🔴 GOING OFFLINE
@@ -136,6 +139,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
         drop: data['dropAddress'] ?? 'Unknown',
         // price: '40',
         price: (data['estimatedPrice'] ?? 0.0).toString(),
+        distance: data['distance']?? '1.2km',
+        
         
 
         /// ❌ REJECT
@@ -162,7 +167,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
           /// 🔥 START LISTENING TO RIDE STATUS
           _listenToActiveRide(rideId);
-        },
+        }, 
       ),
     ).whenComplete(() => _sheetOpen = false);
   }

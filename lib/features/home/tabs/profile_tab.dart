@@ -4,7 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:moksharide_driver/features/auth/driver_signin_page.dart'; // Ensure path is correct
+import 'package:moksharide_driver/features/auth/driver_signin_page.dart';
+import 'package:moksharide_driver/features/home/tabs/edit_profile_page.dart'; // Ensure path is correct
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
@@ -50,6 +51,20 @@ class _ProfileTabState extends State<ProfileTab> {
       print("Error loading profile: $e");
       setState(() => _isLoading = false);
     }
+  }
+
+  // 🚀 Navigate to Edit Profile & Refresh on Return
+  Future<void> _navigateToEditProfile() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditDriverProfilePage(
+          currentData: _driverData,
+        ),
+      ),
+    );
+    // Refresh data automatically after returning
+    _loadDriverProfile();
   }
 
   // 🔥 CORE LOGIC: Check completeness and update 'documents' field
@@ -103,7 +118,6 @@ class _ProfileTabState extends State<ProfileTab> {
       await Future.delayed(const Duration(seconds: 1));
 
       // 3. Update Individual Status to 'uploaded' (NOT verified yet)
-      // This ensures we track which specific docs are done.
       await FirebaseFirestore.instance.collection('drivers').doc(user.uid).update({
         docKey: 'uploaded', 
         'updated_documents': FieldValue.serverTimestamp(),
@@ -140,7 +154,6 @@ class _ProfileTabState extends State<ProfileTab> {
           ),
         );
       } else {
-        // Just show single success
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -201,9 +214,33 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 
   Future<void> _logout() async {
+    try {
+      // 1. Get the user BEFORE signing out
+      final user = FirebaseAuth.instance.currentUser;
+      
+      if (user != null) {
+        // 2. Set them to offline in Firestore
+        await FirebaseFirestore.instance
+            .collection('drivers')
+            .doc(user.uid)
+            .update({
+              'isOnline': false,
+              'lastSeen': FieldValue.serverTimestamp(), // Optional but good practice
+            });
+      }
+    } catch (e) {
+      debugPrint("⚠️ Failed to update online status during logout: $e");
+      // We catch the error so that even if they have no internet, 
+      // the app still allows them to log out locally.
+    }
+
+    // 3. Now sign them out of Firebase and Google
     await FirebaseAuth.instance.signOut();
     await GoogleSignIn().signOut();
+    
     if (!mounted) return;
+    
+    // 4. Send them back to the Login Screen
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const DriverSignInPage()),
@@ -213,9 +250,10 @@ class _ProfileTabState extends State<ProfileTab> {
 
   @override
   Widget build(BuildContext context) {
-    final firstName = (_driverData?['name'] ?? 'Partner').toString().split(' ').first;
+    // Show Name from Firestore, or fallback to 'Partner'
+    final fullName = _driverData?['name'] ?? 'Partner';
+    final firstName = fullName.toString().split(' ').first;
     
-    // ✅ NEW CHECK: Only rely on the master 'documents' field
     bool isFullyVerified = _driverData?['Documents'] == 'verified';
 
     return Scaffold(
@@ -232,15 +270,21 @@ class _ProfileTabState extends State<ProfileTab> {
                         padding: const EdgeInsets.all(20),
                         child: Column(
                           children: [
-                            _sectionTitle('Account Details'),
-                            _infoTile(Icons.email_outlined, 'Email', FirebaseAuth.instance.currentUser?.email ?? 'Hidden'),
+                            // Account Details Section with EDIT Button
+                            _sectionTitle('Account Details', showEdit: true),
+                            
+                            _infoTile(Icons.person_outline, 'Name', fullName),
+                            _infoTile(Icons.email_outlined, 'Email', _driverData?['mail']?? FirebaseAuth.instance.currentUser?.email ?? 'Hidden'),
                             _infoTile(Icons.phone_iphone, 'Phone', _driverData?['phone'] ?? 'Not Linked'),
+                            
                             const SizedBox(height: 30),
-                            _sectionTitle('Required Documents'),
+                            
+                            _sectionTitle('Required Documents', showEdit: false),
                             _documentCard('Aadhaar Card', Icons.fingerprint, 'aadhaar'),
                             _documentCard('Driving License', Icons.drive_eta, 'license'),
                             _documentCard('Vehicle RC', Icons.description, 'RC'),
                             _documentCard('PAN Card', Icons.credit_card, 'PAN'),
+                            
                             const SizedBox(height: 40),
                             _buildLogoutButton(),
                             const SizedBox(height: 40),
@@ -308,7 +352,6 @@ class _ProfileTabState extends State<ProfileTab> {
                       : null,
                 ),
               ),
-              // Show Badge ONLY if 'documents' == 'verified'
               if (isVerified)
                 Positioned(
                   bottom: 0,
@@ -327,7 +370,6 @@ class _ProfileTabState extends State<ProfileTab> {
             style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 5),
-          // Show Tag ONLY if 'documents' == 'verified'
           if (isVerified)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -345,7 +387,6 @@ class _ProfileTabState extends State<ProfileTab> {
               ),
             )
           else 
-            // Show Pending Tag if not yet verified
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
@@ -366,14 +407,27 @@ class _ProfileTabState extends State<ProfileTab> {
     );
   }
 
-  Widget _sectionTitle(String title) {
+  // ✅ Updated Section Title with "Edit" Button
+  Widget _sectionTitle(String title, {required bool showEdit}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 15),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Container(width: 4, height: 20, decoration: BoxDecoration(color: Colors.blue[800], borderRadius: BorderRadius.circular(2))),
-          const SizedBox(width: 10),
-          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+          Row(
+            children: [
+              Container(width: 4, height: 20, decoration: BoxDecoration(color: Colors.blue[800], borderRadius: BorderRadius.circular(2))),
+              const SizedBox(width: 10),
+              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+            ],
+          ),
+          if (showEdit)
+            TextButton.icon(
+              onPressed: _navigateToEditProfile,
+              icon: const Icon(Icons.edit, size: 16, color: Colors.blue),
+              label: const Text("Edit", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+              style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 30)),
+            ),
         ],
       ),
     );
@@ -410,10 +464,8 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 
   Widget _documentCard(String title, IconData icon, String docKey) {
-    // 🛠️ FIX: Check if this specific doc is uploaded (locally or in master verified state)
-    // It is "done" if the specific key is 'uploaded' OR if the whole account is 'verified'
     bool isUploaded = (_driverData?[docKey] == 'uploaded') || 
-                      (_driverData?['documents'] == 'verified');
+                      (_driverData?['Documents'] == 'verified'); // Fixed case sensitive key check
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -482,3 +534,7 @@ class _ProfileTabState extends State<ProfileTab> {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// 🆕 SET PROFILE PAGE (Simple & Clean)
+// ---------------------------------------------------------------------------

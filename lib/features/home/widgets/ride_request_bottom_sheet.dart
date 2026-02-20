@@ -15,7 +15,7 @@ class RideRequestBottomSheet extends StatefulWidget {
     required this.drop,
     // this.price = "₹120", // Default for testing
     required this.price,
-    this.distance = "1.5 km", // Default for testing
+    required this.distance , // Default for testing
     required this.onAccept,
     required this.onReject,
   });
