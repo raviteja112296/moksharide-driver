@@ -353,7 +353,7 @@ void _startLiveTracking() {
                 : null,
             
             onVerifyOtp: _verifyOtp,
-            onCompleteRide: _completeRide, pickupAddress: _activeRideData?['pickupAddress'] ?? "pickup", fareAmount: _activeRideData?['estimatedPrice'],
+            onCompleteRide: _completeRide, pickupAddress: _activeRideData?['pickupAddress'] ?? "pickup", fareAmount: _activeRideData?['estimatedPrice'], passengerName: _activeRideData?['username'],
           ),
       ],
     );

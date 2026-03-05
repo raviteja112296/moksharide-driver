@@ -1,5 +1,6 @@
 // lib/features/home/tabs/home_tab.dart
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -21,14 +22,14 @@ class HomeTab extends StatelessWidget {
     required this.activeRideId, 
     required this.activeRideStatus,
   });
-
+  
   String _getGreeting() {
     final hour = DateTime.now().hour;
     if (hour < 12) return 'Good Morning';
     if (hour < 17) return 'Good Afternoon';
     return 'Good Evening';
   }
-
+  
   void _showQuickLabels(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -130,6 +131,7 @@ class HomeTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    
     // 🔥 THE FIX: Calculate if the driver is currently on a ride
     bool isOnRide = activeRideId != null && 
                     activeRideId!.isNotEmpty && 
@@ -166,10 +168,39 @@ class HomeTab extends StatelessWidget {
                 _getGreeting(),
                 style: const TextStyle(fontSize: 16, color: Colors.white70, fontWeight: FontWeight.w500),
               ),
-              Text(
-                FirebaseAuth.instance.currentUser?.email?.split('@').first ?? 'Driver',
-                style: const TextStyle(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold),
-              ),
+              FutureBuilder<DocumentSnapshot>(
+  future: FirebaseFirestore.instance
+      .collection('drivers')
+      .doc(FirebaseAuth.instance.currentUser!.uid)
+      .get(),
+  builder: (context, snapshot) {
+
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return const Text(
+        "Loading...",
+        style: TextStyle(fontSize: 20, color: Colors.white),
+      );
+    }
+
+    if (!snapshot.hasData || !snapshot.data!.exists) {
+      return const Text(
+        "Driver",
+        style: TextStyle(fontSize: 20, color: Colors.white),
+      );
+    }
+
+    final data = snapshot.data!.data() as Map<String, dynamic>;
+
+    return Text(
+      data['name'] ?? 'Driver',
+      style: const TextStyle(
+        fontSize: 20,
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+  },
+)
             ],
           ),
         ),

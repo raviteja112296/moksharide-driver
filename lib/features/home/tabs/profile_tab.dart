@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -346,10 +345,10 @@ class _ProfileTabState extends State<ProfileTab> {
                   backgroundColor: Colors.grey[200],
                   backgroundImage: _driverData?['profilePic'] != null 
                       ? NetworkImage(_driverData!['profilePic']) 
-                      : null,
-                  child: _driverData?['profilePic'] == null 
-                      ? const Icon(Icons.person, size: 50, color: Colors.grey) 
-                      : null,
+                      : const NetworkImage("https://i.pravatar.cc/150?img=12"),
+                  // child: _driverData?['profilePic'] == null 
+                  //     ? const Icon(Icons.person, size: 50, color: Colors.grey) 
+                  //     : null,
                 ),
               ),
               if (isVerified)

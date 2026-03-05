@@ -31,7 +31,7 @@ class DriverRideSheet extends StatelessWidget {
     required this.pickupAddress,
     required this.dropAddress,
     this.dropLoc,
-    this.passengerName = "Rahul Kumar", // Default for demo
+    required this.passengerName , 
     this.passengerPhoto = "https://i.pravatar.cc/150?img=11",
     required this.fareAmount,
     required this.onVerifyOtp,
